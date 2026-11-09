@@ -3,8 +3,7 @@
 # The gateway pushes spans here (OTLP over HTTP, port 4318), and Grafana reads
 # them back (port 3200) through the data source in argocd/monitoring.yaml.
 # Same pattern as monitoring.yaml: a Helm chart that Argo CD renders, every
-# setting in Git. Applied once by hand:
-#   kubectl apply -f argocd/tempo.yaml
+# setting in Git. Managed by argocd/root.yaml (app of apps).
 #
 # Single-binary mode: one pod does receiving, storing and querying. The
 # "distributed" chart splits that into ~8 pods that scale separately, which

@@ -116,7 +116,7 @@ address: any copy can serve any request, because everything they need is in Post
 ├── scripts/client.py         # end-to-end test using the real Anthropic SDK
 ├── Dockerfile                # 2-stage image, non-root
 ├── k8s/                      # Kubernetes manifests (what Argo CD syncs)
-├── argocd/gateway.yaml       # Argo CD Application (applied once by hand)
+├── argocd/                   # Argo CD Applications; root.yaml (app of apps) syncs the rest
 ├── infra/
 │   ├── bootstrap/            # permanent, free: compartment, state bucket, budget alerts
 │   └── cluster/              # per-session: VCN, subnets, gateways, OKE cluster + node pool
@@ -837,10 +837,11 @@ pods at random), so 4 pods allow clean 25% / 50% steps. Safe because the gateway
 ### Argo CD (GitOps)
 
 [argocd/gateway.yaml](../argocd/gateway.yaml) is an Argo CD `Application`: "keep namespace `llm-gateway` on this
-cluster identical to `k8s/` on `main`". Applied once by hand; after that, a push to `main` *is* the deploy.
+cluster identical to `k8s/` on `main`". It's managed by [argocd/root.yaml](../argocd/root.yaml) (app of apps), the
+only Application applied by hand; after that, a push to `main` *is* the deploy.
 
-- Source: `git@github.com:musishere/llm-gateway.git`, path `k8s`, via a read-only SSH deploy key
-  stored in a Secret in the `argocd` namespace.
+- Source: `https://github.com/musishere/llm-gateway.git`, path `k8s`. The repo is public, so Argo CD reads it over
+  HTTPS with no deploy key.
 - `automated.prune: true`: a file deleted from `k8s/` has its object deleted from the cluster. Only objects
   Argo CD created, so the hand-made `gateway-secrets` is safe. **Risk:** deleting `postgres.yaml` deletes the
   database.
@@ -976,8 +977,9 @@ See [deployment.md §10 and §21](deployment.md) for the full command list. Shor
 colima start --cpu 4 --memory 6
 minikube start --driver=docker --cpus=4 --memory=5g
 docker build -t gateway:dev . && minikube image load gateway:dev
-# create gateway-secrets from .env, install Argo CD, add the repo deploy key, then:
-kubectl apply -f argocd/gateway.yaml
+# create gateway-secrets from .env, install Argo CD, then:
+kubectl apply -f argocd/monitoring.yaml   # first: the gateway's PodMonitor needs its CRDs
+kubectl apply -f argocd/root.yaml         # app of apps: adopts monitoring, creates gateway + tempo
 kubectl port-forward -n llm-gateway svc/gateway 8000:80
 ```
 

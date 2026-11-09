@@ -1,0 +1,35 @@
+# WHAT: Root Argo CD Application ("app of apps"). It watches this repo's argocd/
+#       folder and keeps every Application in it (gateway, monitoring, tempo,
+#       and this file itself) identical to Git.
+# WHY:  Applications used to be applied by hand, so edits to them in Git never
+#       reached the cluster (that's how it ended up watching a dead repo).
+# HOW:  Apply ONCE by hand: kubectl apply -f argocd/root.yaml
+#       That's the last manual step; never kubectl apply argocd/ files again.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  # Application objects must live in Argo CD's own namespace.
+  namespace: argocd
+spec:
+  project: default
+  source:
+    # Public repo over plain HTTPS: no credentials, same as gateway.yaml.
+    repoURL: https://github.com/musishere/llm-gateway.git
+    targetRevision: main
+    # Only Application manifests live here, so this app only ever creates
+    # Applications, never pods. It includes this file: root manages itself.
+    path: argocd
+  destination:
+    server: https://kubernetes.default.svc
+    # Where the child Application objects get created.
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # A hand edit to a live Application (kubectl edit) is reverted to what
+      # Git says, so Git stays the only source of truth.
+      selfHeal: true
+      # OFF on purpose: deleting a file from argocd/ does NOT delete that app
+      # from the cluster. Removing a whole app (say, monitoring) should be a
+      # deliberate kubectl delete, never a side effect of a file move.
+      prune: false

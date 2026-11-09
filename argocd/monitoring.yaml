@@ -3,10 +3,9 @@
 #
 # Argo CD renders the chart itself, so there's no helm CLI and no hand-run
 # `helm install`: the chart version and every setting live here, in Git.
-# Applied once by hand, like argocd/gateway.yaml:
-#   kubectl apply -f argocd/monitoring.yaml
-# ponytail: editing this file needs a re-apply by hand; an "app of apps"
-# (an Application that syncs argocd/) removes that step if apps multiply.
+# Managed by argocd/root.yaml (app of apps): edit this file, push, done.
+# On a fresh cluster it's still applied by hand FIRST (deployment.md, rebuild
+# step 5), because the gateway's PodMonitor needs this chart's CRDs.
 #
 # The gateway's own scrape rule is NOT here: it's k8s/gateway-podmonitor.yaml,
 # next to the gateway, so the app's monitoring changes with the app.

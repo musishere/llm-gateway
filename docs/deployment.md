@@ -759,9 +759,9 @@ syncPolicy:
     selfHeal: true   # a hand edit (kubectl edit) → reverted to what Git says
 ```
 
-**The Applications themselves are applied by hand once** (`kubectl apply -f argocd/…`). That's the
-bootstrap: after it, Git drives everything. Editing an `argocd/*.yaml` file needs a re-apply by hand. An "app
-of apps" (an Application that syncs `argocd/`) would remove that step if apps multiply.
+**One Application is applied by hand, once:** `argocd/root.yaml`, an "app of apps" that syncs the `argocd/`
+folder. It manages every other Application (gateway, monitoring, tempo) and itself, so editing an
+`argocd/*.yaml` file in Git is enough. That's the bootstrap: after it, Git drives everything.
 
 ### 18.4 Its parts (pods in `argocd`)
 
@@ -1375,13 +1375,9 @@ kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argop
 kubectl create namespace argo-rollouts
 kubectl apply -n argo-rollouts --server-side -f https://github.com/argoproj/argo-rollouts/releases/download/v1.10.0/install.yaml
 
-# 4. Argo CD's access to the private repo (read-only deploy key)
-kubectl create secret generic repo-ai-platform -n argocd --from-literal=type=git \
-  --from-literal=url=git@github.com:musishere/llm-gateway.git \
-  --from-file=sshPrivateKey=$HOME/.ssh/argocd_ai_platform
-kubectl label secret repo-ai-platform -n argocd argocd.argoproj.io/secret-type=repository
+# 4. No repo credential needed: the repo is public, Argo CD reads it over HTTPS
 
-# 5. Monitoring stack first (the gateway's PodMonitor needs its CRDs)
+# 5. Monitoring stack first (the gateway's PodMonitor needs its CRDs); root adopts it in step 7
 kubectl create namespace monitoring
 kubectl create secret generic grafana-admin -n monitoring \
   --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -hex 16)"
@@ -1399,8 +1395,9 @@ read -s "PAT?GHCR token (read:packages): "; echo
 kubectl create secret docker-registry ghcr-pull -n llm-gateway \
   --docker-server=ghcr.io --docker-username=musishere --docker-password="$PAT"; unset PAT
 
-# 7. The bootstrap: from here on, Git drives
-kubectl apply -f argocd/gateway.yaml
+# 7. The bootstrap: the app of apps. It adopts monitoring, creates gateway and tempo;
+#    from here on Git drives everything, Application edits included
+kubectl apply -f argocd/root.yaml
 
 # 8. A tenant (new database = no tenants)
 kubectl exec -n llm-gateway svc/gateway -- python -m gateway.create_tenant <name>
@@ -1545,7 +1542,6 @@ kubectl delete namespace llm-gateway
 | `/metrics` readable by any pod in the cluster | Tenant usage visible inside the cluster | NetworkPolicy allowing only Prometheus |
 | Argo CD polls Git | Up to ~3 min deploy lag | Webhook (needs a public Argo CD) |
 | No alert receivers | Alerts go nowhere | Alertmanager receivers (SLO step) |
-| `argocd/*.yaml` applied by hand | Edits need a manual re-apply | App of apps |
 
 ---
 

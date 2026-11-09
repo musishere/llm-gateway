@@ -1,8 +1,9 @@
 # Argo CD Application: the "instruction card" telling Argo CD what to deploy.
 #
 # It says: keep namespace llm-gateway on this cluster identical to the k8s/
-# folder on the main branch. Applied once by hand (the bootstrap step); after
-# that, a push to main is the deploy (deployment.md section 4).
+# folder on the main branch. Managed by argocd/root.yaml (app of apps), so
+# edits to this file apply themselves; a push to main is the deploy
+# (deployment.md section 4).
 #
 # The repo is public, so Argo CD reads it over plain HTTPS: no deploy key,
 # no repo Secret. (If it ever goes private, switch back to an SSH deploy key.)
