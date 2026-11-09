@@ -4,8 +4,8 @@
 # folder on the main branch. Applied once by hand (the bootstrap step); after
 # that, a push to main is the deploy (deployment.md section 4).
 #
-# The repo is private, so Argo CD reads it with a read-only deploy key stored
-# in a Secret in the argocd namespace, created by hand, never committed.
+# The repo is public, so Argo CD reads it over plain HTTPS: no deploy key,
+# no repo Secret. (If it ever goes private, switch back to an SSH deploy key.)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -14,11 +14,10 @@ metadata:
 spec:
   project: default
   source:
-    # SSH URL because the credential is an SSH deploy key.
-    repoURL: git@github.com:musishere/AI-platform-engineering.git
+    repoURL: https://github.com/musishere/llm-gateway.git
     targetRevision: main
     # Path from the repo root, not from this file.
-    path: llm-gateway/k8s
+    path: k8s
   destination:
     # "This same cluster": Argo CD deploys into the cluster it runs in.
     server: https://kubernetes.default.svc

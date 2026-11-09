@@ -839,7 +839,7 @@ pods at random), so 4 pods allow clean 25% / 50% steps. Safe because the gateway
 [argocd/gateway.yaml](../argocd/gateway.yaml) is an Argo CD `Application`: "keep namespace `llm-gateway` on this
 cluster identical to `k8s/` on `main`". Applied once by hand; after that, a push to `main` *is* the deploy.
 
-- Source: `git@github.com:musishere/AI-platform-engineering.git`, path `k8s`, via a read-only SSH deploy key
+- Source: `git@github.com:musishere/llm-gateway.git`, path `k8s`, via a read-only SSH deploy key
   stored in a Secret in the `argocd` namespace.
 - `automated.prune: true`: a file deleted from `k8s/` has its object deleted from the cluster. Only objects
   Argo CD created, so the hand-made `gateway-secrets` is safe. **Risk:** deleting `postgres.yaml` deletes the

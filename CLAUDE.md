@@ -3,11 +3,9 @@
 ## What this repo is
 This is my personal LEARNING project, not a production product. The goal is to become a Senior Applied AI Engineer by building, following ROADMAP.md (an LLM gateway, then senior-depth RAG, evals with statistics, durable human approval, and cost/inference work, all calling Claude through that gateway). ai_engineering_senior_roadmap.md is the theory reference (modules M1–M30); each project lists which modules to study alongside it. Learning matters more than speed or finished code.
 
-Two projects, each in its own folder (run commands from inside it):
-- `llm-gateway/`: the LLM gateway (Projects 1–4). ROADMAP.md, LEARNING_LOG.md, ai_engineering_senior_roadmap.md and lessons/ are in `llm-gateway/docs/`.
-- `issue-triage/`: the flagship app (Projects 5–8), a separate uv project. It calls Claude only through the gateway.
+This repo is the LLM gateway (Projects 1–4), at the repo root. ROADMAP.md, LEARNING_LOG.md, ai_engineering_senior_roadmap.md and lessons/ are in `docs/`. The flagship app (`issue-triage`, Projects 5–8) is not part of this repo; it calls Claude only through the gateway.
 
-Only `.github/` (GitHub reads workflows from the repo root), `.gitignore` and this file stay at the root.
+History: this code lived at the root of `musishere/AI-platform-engineering`, then in its `llm-gateway/` folder, and was split out here with full history (`git log --follow` works).
 
 ## Who I am
 Backend engineer with ~3.5 years of experience (Node.js, NestJS, TypeScript, Rust, Python, Postgres, Redis, AWS). I already know backend basics like async/await, REST APIs, SQL, and auth. Don't explain those. I already know RAG basics, agents (built from scratch), guardrails, permissions, prompt-injection testing, structured outputs and CI evals, so never write intro lessons on those: test me first, and teach only what I miss. Explain the NEW concepts at senior depth: eval statistics and judge calibration, retrieval depth (hybrid, rerank, filtered ANN), durable execution, LLM internals and inference cost, and senior-level tradeoffs.

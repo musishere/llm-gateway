@@ -115,9 +115,9 @@ Postgres + Redis + 4 gateways. Squeezed smaller, pods sit in `Pending` (no room 
 
 | Where | What |
 |---|---|
-| GitHub repo `musishere/AI-platform-engineering` | All code and manifests: the **single source of truth** |
+| GitHub repo `musishere/llm-gateway` | All code and manifests: the **single source of truth** |
 | GitHub Actions | CI: builds, scans and pushes the image |
-| GHCR (`ghcr.io/musishere/ai-platform-engineering/gateway`) | Private image registry |
+| GHCR (`ghcr.io/musishere/llm-gateway/gateway`) | Private image registry |
 | OpenRouter | The upstream LLM API (routes to Claude) |
 | Oracle Cloud (`infra/`) | Terraform state bucket + budget alerts (permanent). The OKE cluster is written but not running |
 
@@ -327,7 +327,7 @@ spec:
     - name: ghcr-pull                # login for the private GHCR image
   containers:
     - name: gateway
-      image: ghcr.io/musishere/ai-platform-engineering/gateway:<git-sha>   # written by CI
+      image: ghcr.io/musishere/llm-gateway/gateway:<git-sha>   # written by CI
       imagePullPolicy: IfNotPresent
       ports:
         - name: http      containerPort: 8000     # the API
@@ -692,7 +692,7 @@ File: [.github/workflows/gateway.yml](../.github/workflows/gateway.yml).
 ```
 checkout
    │
-Build     docker build -t ghcr.io/musishere/ai-platform-engineering/gateway:$GITHUB_SHA .
+Build     docker build -t ghcr.io/musishere/llm-gateway/gateway:$GITHUB_SHA .
    │
 Scan      docker run aquasec/trivy:0.74.0 image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed <image>
    │        a fixable HIGH/CRITICAL vulnerability → job fails → nothing is pushed or deployed
@@ -1377,7 +1377,7 @@ kubectl apply -n argo-rollouts --server-side -f https://github.com/argoproj/argo
 
 # 4. Argo CD's access to the private repo (read-only deploy key)
 kubectl create secret generic repo-ai-platform -n argocd --from-literal=type=git \
-  --from-literal=url=git@github.com:musishere/AI-platform-engineering.git \
+  --from-literal=url=git@github.com:musishere/llm-gateway.git \
   --from-file=sshPrivateKey=$HOME/.ssh/argocd_ai_platform
 kubectl label secret repo-ai-platform -n argocd argocd.argoproj.io/secret-type=repository
 
