@@ -8,6 +8,12 @@ kind: PersistentVolumeClaim
 metadata:
   name: postgres-data
   namespace: llm-gateway
+  annotations:
+    # Argo CD may never delete this disk, even if it disappears from Git.
+    # Without this, deleting or renaming this file makes Argo CD prune the
+    # PVC, and the StorageClass's reclaim policy (Delete) then wipes the data.
+    # Removing the disk on purpose is a deliberate kubectl delete.
+    argocd.argoproj.io/sync-options: Prune=false
 spec:
   # ReadWriteOnce = one node mounts it at a time, which is all a single
   # Postgres needs. On minikube it's a folder on the node; on OKE the same
