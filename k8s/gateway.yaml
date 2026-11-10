@@ -55,10 +55,9 @@ spec:
         # Refuse to start if the image ever runs as root. The Dockerfile
         # already uses UID 10001; this catches a future image that forgets to.
         runAsNonRoot: true
-      # The GHCR image is private: this Secret (a read-only token, created by
-      # hand per cluster, never committed) is the kubelet's login for pulling.
-      imagePullSecrets:
-        - name: ghcr-pull
+      # No imagePullSecrets: the GHCR image is public, so the kubelet pulls it
+      # anonymously. A login here would only add a token that can expire (an
+      # expired one makes GHCR answer "denied" even for public images).
       containers:
         - name: gateway
           # Written by CI (.github/workflows/gateway.yml) on every merge to

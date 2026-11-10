@@ -217,7 +217,7 @@ system is one of these loops, stacked on top of each other:
  │  Argo Rollouts: 25% (1 of 4 pods) → smoke test → 2 min → 50% → 2 min → 100%                │
  │        │               fail → abort, back to the stable version                            │
  │        ▼                                                                                   │
- │  kubelet pulls :<sha> from GHCR (ghcr-pull Secret) → pods run                              │
+ │  kubelet pulls :<sha> from GHCR (public, no login) → pods run                              │
  │        │                                                                                   │
  │        ▼  every 15 s                                                                       │
  │  Prometheus scrapes each gateway pod's :9100/metrics  ──▶  Grafana dashboard               │
@@ -289,8 +289,8 @@ Argo CD deploys **everything in this folder** into the cluster, and nothing else
 | [redis.yaml](../k8s/redis.yaml) | Deployment + Service `redis` | Counters (section 11) |
 | [db-init.yaml](../k8s/db-init.yaml) | ConfigMap `db-init` | **Generated** copy of `db/*.sql`, run by Postgres on first start |
 
-**Not in Git, created by hand once per cluster** (they're secrets): `gateway-secrets`, `ghcr-pull`
-(section 12).
+**Not in Git, created by hand once per cluster** (it's a secret): `gateway-secrets` (section 12).
+The image is public, so there's no pull secret.
 
 **Why the gateway's monitoring and dashboard live in `k8s/`, not in the monitoring setup:** whoever owns
 the app owns how it's watched. A change to the gateway and a change to its dashboard go through the same
@@ -323,8 +323,6 @@ section. The Argo Rollouts controller runs it instead of Kubernetes' Deployment 
 spec:
   securityContext:
     runAsNonRoot: true               # refuse to start if the image runs as root
-  imagePullSecrets:
-    - name: ghcr-pull                # login for the private GHCR image
   containers:
     - name: gateway
       image: ghcr.io/musishere/llm-gateway/gateway:<git-sha>   # written by CI
@@ -344,7 +342,7 @@ spec:
 |---|---|
 | `image: …:<git-sha>` | One tag per commit. A new commit = a new tag = a changed pod template = a rollout. A reused tag like `:dev` or `:latest` changes nothing, so nothing would roll out |
 | `imagePullPolicy: IfNotPresent` | Use the copy already on the node if there is one. **Safe only because SHA tags are never reused**: the same tag always means the same bytes |
-| `imagePullSecrets: ghcr-pull` | The image is private. This is the kubelet's login to GHCR |
+| No `imagePullSecrets` | The image is public, so the kubelet pulls without a login. One less token to expire (an expired one makes GHCR say `denied` even for public images) |
 | `runAsNonRoot` + UID 10001 in the Dockerfile | If someone breaks into the process, they aren't root in the container |
 | `allowPrivilegeEscalation: false` | The process can't gain more rights than it started with |
 | Two named ports | `http` for callers, `metrics` for Prometheus. Only `http` is behind the Services |
@@ -495,7 +493,6 @@ which puts a content hash in the ConfigMap's name.
 | Secret | Namespace | Contains | Used by | Created by | If it leaks |
 |---|---|---|---|---|---|
 | `gateway-secrets` | llm-gateway | `UPSTREAM_API_KEY`, `DATABASE_URL`, `POSTGRES_PASSWORD` | gateway, postgres | Me, from `.env` + a random DB password | Someone spends my OpenRouter credit → rotate at OpenRouter |
-| `ghcr-pull` | llm-gateway | GitHub classic PAT, **only** `read:packages` | kubelet (pulling the image) | Me, from a hidden prompt | Someone can pull my image (read my code). Delete the token on GitHub |
 | `grafana-admin` | monitoring | Grafana admin user + random password | Grafana | Me, `openssl rand` | Someone can edit dashboards. Recreate it |
 | `repo-ai-platform` | argocd | SSH **deploy key** (read-only) for the repo | Argo CD repo-server | Me | Read my code. Delete the key on GitHub |
 | `argocd-initial-admin-secret` | argocd | Argo CD admin password | Me (UI login) | Argo CD install | Full control of what's deployed |
@@ -607,7 +604,7 @@ On OKE the same PVC would create an **OCI Block Volume**, a real network disk.
                     │ 5. Scheduler: "needs 100m CPU + 128Mi, node minikube has room" → assigns the node
                     ▼
                kubelet on node minikube
-                 6. image present? IfNotPresent → pull from GHCR with ghcr-pull if not
+                 6. image present? IfNotPresent → pull from GHCR (public) if not
                  7. reads ConfigMap gateway-config + Secret gateway-secrets → env vars
                  8. starts the container as uid 10001 → uvicorn → lifespan (DB pool, Redis, metrics server :9100)
                  9. startup probe every 2 s → passes → liveness + readiness take over
@@ -820,9 +817,8 @@ Every object Argo CD manages carries an annotation like:
 ```
 argocd.argoproj.io/tracking-id: gateway:argoproj.io/Rollout:llm-gateway/gateway
 ```
-**Prune only deletes objects with this annotation.** Hand-made Secrets (`gateway-secrets`, `ghcr-pull`,
-`grafana-admin`) never get it, so they survive. **Risk:** deleting `postgres.yaml` from Git deletes the
-database's PVC.
+**Prune only deletes objects with this annotation.** Hand-made Secrets (`gateway-secrets`, `grafana-admin`) never get it, so they survive. The Postgres PVC
+has it, but also `Prune=false`, so deleting `postgres.yaml` from Git leaves the database alone.
 
 ### 19.5 Rollback in GitOps
 
@@ -1391,9 +1387,6 @@ kubectl create secret generic gateway-secrets -n llm-gateway \
   --from-literal=POSTGRES_PASSWORD="$PW" \
   --from-literal=DATABASE_URL="postgresql://gateway:$PW@postgres:5432/gateway" \
   --from-literal=UPSTREAM_API_KEY="$KEY"
-read -s "PAT?GHCR token (read:packages): "; echo
-kubectl create secret docker-registry ghcr-pull -n llm-gateway \
-  --docker-server=ghcr.io --docker-username=musishere --docker-password="$PAT"; unset PAT
 
 # 7. The bootstrap: the app of apps. It adopts monitoring, creates gateway and tempo;
 #    from here on Git drives everything, Application edits included
@@ -1467,7 +1460,7 @@ kubectl delete namespace llm-gateway
 | `Connection refused` on `localhost:…` | The port-forward isn't running (or its pod was replaced) | `lsof -nP -iTCP:8000 -sTCP:LISTEN`; restart the port-forward |
 | Grafana "failed to load its application files" | Grafana restarted mid-load (e.g. OOMKilled) and the tunnel died | `lastState.terminated.reason`; restart the port-forward |
 | Pod `Pending` | Not enough CPU/memory requests left on the node | `kubectl describe pod` → `Insufficient memory` |
-| `ImagePullBackOff` | `ghcr-pull` missing, token expired, or wrong tag | `kubectl describe pod` → Events |
+| `ImagePullBackOff` | Wrong tag, image made private, or a stale pull secret sending bad credentials | `kubectl describe pod` → Events |
 | `CreateContainerConfigError` | A referenced Secret/ConfigMap doesn't exist | `kubectl get secret -n <ns>` |
 | `CrashLoopBackOff` right after a cluster start | Booted before DNS/Postgres was ready | `kubectl logs --previous`; usually settles by itself |
 | `OOMKilled` (exit 137) | Memory limit too low | Raise the limit in Git |
@@ -1573,7 +1566,7 @@ serve traffic, and what each one does.
 GitHub Actions (paths filter matches) → build → Trivy scan → push to GHCR with the SHA tag → bot commits the
 tag into k8s/gateway.yaml → Argo CD polls Git (≤ 3 min) and applies the new Rollout spec → Argo Rollouts
 creates a new ReplicaSet and runs the steps (25% → smoke test → 2 m → 50% → 2 m → 100%) → the kubelet pulls
-the image with ghcr-pull and starts pods → the startup probe passes → readiness passes → the EndpointSlice
+the (public) image and starts pods → the startup probe passes → readiness passes → the EndpointSlice
 adds them to the gateway Service. See 4, 17–21.
 </details>
 
