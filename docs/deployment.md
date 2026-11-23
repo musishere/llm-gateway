@@ -492,7 +492,7 @@ which puts a content hash in the ConfigMap's name.
 
 | Secret | Namespace | Contains | Used by | Created by | If it leaks |
 |---|---|---|---|---|---|
-| `gateway-secrets` | llm-gateway | `UPSTREAM_API_KEY`, `DATABASE_URL`, `POSTGRES_PASSWORD` | gateway, postgres | Me, from `.env` + a random DB password | Someone spends my OpenRouter credit → rotate at OpenRouter |
+| `gateway-secrets` | llm-gateway | `UPSTREAM_API_KEY`, `DATABASE_URL`, `POSTGRES_PASSWORD` | gateway, postgres | Me, key typed at a hidden prompt + a random DB password (section 30) | Someone spends my OpenRouter credit → rotate at OpenRouter |
 | `grafana-admin` | monitoring | Grafana admin user + random password | Grafana | Me, `openssl rand` | Someone can edit dashboards. Recreate it |
 | `repo-ai-platform` | argocd | SSH **deploy key** (read-only) for the repo | Argo CD repo-server | Me | Read my code. Delete the key on GitHub |
 | `argocd-initial-admin-secret` | argocd | Argo CD admin password | Me (UI login) | Argo CD install | Full control of what's deployed |
@@ -1359,9 +1359,11 @@ Everything in Git rebuilds itself. These steps don't, on purpose: they're secret
 the robot.
 
 ```bash
-# 1. The boxes
-colima start --cpu 4 --memory 6
-minikube start --driver=docker --cpus=4 --memory=5g
+# 1. The boxes. Sizes are fixed at creation: minikube can't resize a cluster.
+#    4 GB (its default) starved the API server (TLS handshake timeouts, 2026-11-21).
+#    Calico, because the default CNI accepts NetworkPolicies but never enforces them.
+open -a Docker                                   # Docker Desktop (8 GB, 4 CPU in its settings)
+minikube start --cni=calico --cpus=4 --memory=6g
 
 # 2. Argo CD (pinned; --server-side because its CRDs are too big)
 kubectl create namespace argocd
@@ -1382,11 +1384,15 @@ kubectl apply -f argocd/monitoring.yaml
 
 # 6. The gateway's secrets (never in Git)
 kubectl apply -f k8s/00-namespace.yaml
-PW=$(openssl rand -hex 16); KEY=$(grep '^UPSTREAM_API_KEY=' .env | cut -d= -f2-)
-kubectl create secret generic gateway-secrets -n llm-gateway \
+#    The key is typed at a hidden prompt (not in shell history). The guard refuses an
+#    empty key: kubectl happily stores "" and the gateway would only fail on a real call.
+read -rs "KEY?OpenRouter API key: "; echo; PW=$(openssl rand -hex 16)
+[[ ${#KEY} -gt 20 ]] && kubectl create secret generic gateway-secrets -n llm-gateway \
   --from-literal=POSTGRES_PASSWORD="$PW" \
   --from-literal=DATABASE_URL="postgresql://gateway:$PW@postgres:5432/gateway" \
-  --from-literal=UPSTREAM_API_KEY="$KEY"
+  --from-literal=UPSTREAM_API_KEY="$KEY" || echo "KEY is empty, Secret NOT created"
+unset KEY PW
+kubectl -n llm-gateway describe secret gateway-secrets | tail -4   # UPSTREAM_API_KEY ~73 bytes, not 0
 
 # 7. The bootstrap: the app of apps. It adopts monitoring, creates gateway and tempo;
 #    from here on Git drives everything, Application edits included
@@ -1405,7 +1411,7 @@ arranges the furniture."
 
 ```bash
 # ── Boxes ────────────────────────────────────────────────────────────────────
-colima start --cpu 4 --memory 6 && minikube start
+open -a Docker && minikube start                       # existing cluster keeps its size
 minikube stop                                          # free RAM; the cluster is kept
 
 # ── Look ─────────────────────────────────────────────────────────────────────
