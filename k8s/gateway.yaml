@@ -58,6 +58,13 @@ spec:
         # Refuse to start if the image ever runs as root. The Dockerfile
         # already uses UID 10001; this catches a future image that forgets to.
         runAsNonRoot: true
+      # A throwaway writable /tmp (the root filesystem is read-only). Lives
+      # on the node's disk and dies with the pod; the cap stops a runaway or
+      # an attacker from filling that disk.
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
       # No imagePullSecrets: the GHCR image is public, so the kubelet pulls it
       # anonymously. A login here would only add a token that can expire (an
       # expired one makes GHCR answer "denied" even for public images).
@@ -112,6 +119,15 @@ spec:
             # 1024, so not even NET_BIND_SERVICE is needed.
             capabilities:
               drop: ["ALL"]
+            # The image's files can't be changed or added to at runtime: an
+            # attacker can't drop a tool into the container or edit the code.
+            # The app writes nothing itself (no pycache either: /app is
+            # root-owned); /tmp below is the one writable spot, for libraries
+            # that need a temp file.
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           # All probes use /health, which never touches the DB. A DB blip
           # therefore doesn't restart every gateway at once.
           # ponytail: readiness stays "ready" while Postgres is down; add a
