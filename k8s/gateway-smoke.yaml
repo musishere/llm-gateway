@@ -31,6 +31,9 @@ spec:
             template:
               spec:
                 restartPolicy: Never
+                # Only runs curl against the gateway; no Kubernetes API
+                # token needed, so none is mounted.
+                automountServiceAccountToken: false
                 containers:
                   - name: smoke
                     image: curlimages/curl:8.22.0

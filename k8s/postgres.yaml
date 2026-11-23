@@ -43,6 +43,9 @@ spec:
       labels:
         app: postgres
     spec:
+      # Postgres never calls the Kubernetes API, so mount no API token: a
+      # shell in this pod finds no credential (the default one lasts a year).
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           # Pinned major version: a new major changes the on-disk format, and
