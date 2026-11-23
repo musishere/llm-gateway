@@ -51,6 +51,9 @@ spec:
       labels:
         app: gateway
     spec:
+      # Own identity instead of the namespace's shared "default" account.
+      # The ServiceAccount (bottom of this file) mounts no API token.
+      serviceAccountName: gateway
       securityContext:
         # Refuse to start if the image ever runs as root. The Dockerfile
         # already uses UID 10001; this catches a future image that forgets to.
@@ -172,3 +175,19 @@ spec:
   ports:
     - port: 80
       targetPort: 8000
+---
+# The gateway's own identity, instead of the namespace's shared "default".
+# No Role or RoleBinding points at it, on purpose: the gateway talks to
+# Postgres, Redis and the LLM provider, never to the Kubernetes API, so it
+# needs zero API permissions. Its own name still matters: Linkerd mTLS and
+# its policies identify pods by ServiceAccount, so a rule like "only the
+# gateway may reach Redis" needs the gateway to be told apart from the rest.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gateway
+  namespace: llm-gateway
+# Mount no API token into pods that use this account. The default token is
+# valid for a year (its exp; the 1h "warnafter" only logs a warning), so a
+# shell in the gateway would hand an attacker a working credential.
+automountServiceAccountToken: false
