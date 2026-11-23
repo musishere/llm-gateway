@@ -105,6 +105,13 @@ spec:
               value: k8s.pod.name=$(POD_NAME)
           securityContext:
             allowPrivilegeEscalation: false
+            # Remove every Linux capability (root's powers, split into ~40
+            # flags) from the process's bounding set. As UID 10001 it has none
+            # active anyway; this also takes away the ceiling a setuid binary
+            # or kernel bug could use to win them back. Port 8000 is above
+            # 1024, so not even NET_BIND_SERVICE is needed.
+            capabilities:
+              drop: ["ALL"]
           # All probes use /health, which never touches the DB. A DB blip
           # therefore doesn't restart every gateway at once.
           # ponytail: readiness stays "ready" while Postgres is down; add a
